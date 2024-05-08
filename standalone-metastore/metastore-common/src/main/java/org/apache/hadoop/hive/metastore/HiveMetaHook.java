@@ -231,7 +231,7 @@ public interface HiveMetaHook {
    * Called before dropping the partitions from the table in the metastore during ALTER TABLE DROP PARTITION.
    * @param table table whose partition needs to be dropped
    * @param context context of the  operation
-   * @param req Request of drop partitions
+   * @param partsSpec request partition specification
    * @throws MetaException
    */
   default void preDropPartitions(Table table,
