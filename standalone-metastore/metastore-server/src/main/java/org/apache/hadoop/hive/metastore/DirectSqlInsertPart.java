@@ -355,12 +355,12 @@ class DirectSqlInsertPart {
     insertInBatch("\"PARTITION_KEY_VALS\"", columns, columnCount, rowCount, batchExecutionContext);
   }
 
-  private void insertColumnDescriptorInBatch(Map<Long, MColumnDescriptor> cdIdToColumnDescriptor) throws MetaException {
-    int rowCount = cdIdToColumnDescriptor.size();
+  private void insertColumnDescriptorInBatch(Map<MColumnDescriptor, Long> columnDescriptorToId) throws MetaException {
+    int rowCount = columnDescriptorToId.size();
     String columns = "(\"CD_ID\")";
     int columnCount = 1;
     BatchExecutionContext batchExecutionContext = new BatchExecutionContext() {
-      final Iterator<Long> it = cdIdToColumnDescriptor.keySet().iterator();
+      final Iterator<Long> it = columnDescriptorToId.values().iterator();
       @Override
       public void execute(String batchQueryText, int batchRowCount) throws MetaException {
         Object[] params = new Object[batchRowCount * columnCount];
@@ -374,9 +374,9 @@ class DirectSqlInsertPart {
     insertInBatch("\"CDS\"", columns, columnCount, rowCount, batchExecutionContext);
   }
 
-  private void insertColumnV2InBatch(Map<Long, MColumnDescriptor> cdIdToColumnDescriptor) throws MetaException {
+  private void insertColumnV2InBatch(Map<MColumnDescriptor, Long> columnDescriptorToId) throws MetaException {
     int rowCount = 0;
-    for (MColumnDescriptor cd : cdIdToColumnDescriptor.values()) {
+    for (MColumnDescriptor cd : columnDescriptorToId.keySet()) {
       rowCount += cd.getCols().size();
     }
     if (rowCount == 0) {
@@ -386,9 +386,9 @@ class DirectSqlInsertPart {
     int columnCount = 5;
     BatchExecutionContext batchExecutionContext = new BatchExecutionContext() {
       int colIndex = 0;
-      final Iterator<Map.Entry<Long, MColumnDescriptor>> cdIt = cdIdToColumnDescriptor.entrySet().iterator();
-      Map.Entry<Long, MColumnDescriptor> cdEntry = cdIt.next();
-      Iterator<MFieldSchema> it = cdEntry.getValue().getCols().iterator();
+      final Iterator<Map.Entry<MColumnDescriptor, Long>> cdIt = columnDescriptorToId.entrySet().iterator();
+      Map.Entry<MColumnDescriptor, Long> cdEntry = cdIt.next();
+      Iterator<MFieldSchema> it = cdEntry.getKey().getCols().iterator();
       @Override
       public void execute(String batchQueryText, int batchRowCount) throws MetaException {
         Object[] params = new Object[batchRowCount * columnCount];
@@ -407,7 +407,7 @@ class DirectSqlInsertPart {
           if (index < batchRowCount) {
             colIndex = 0;
             cdEntry = cdIt.next(); // cdIt.next() cannot be null since it is within the row count
-            it = cdEntry.getValue().getCols().iterator();
+            it = cdEntry.getKey().getCols().iterator();
           }
         } while (index < batchRowCount);
         executeQuery(batchQueryText, params);
@@ -726,9 +726,9 @@ class DirectSqlInsertPart {
    * @throws MetaException
    */
   public void addPartitions(List<MPartition> parts, List<List<MPartitionPrivilege>> partPrivilegesList,
-      List<List<MPartitionColumnPrivilege>> partColPrivilegesList) throws MetaException {
+      List<List<MPartitionColumnPrivilege>> partColPrivilegesList, Map<MColumnDescriptor, Long> cdToCdId) throws MetaException {
     Map<Long, MSerDeInfo> serdeIdToSerDeInfo = new HashMap<>();
-    Map<Long, MColumnDescriptor> cdIdToColumnDescriptor = new HashMap<>();
+    // Map<Long, MColumnDescriptor> cdIdToColumnDescriptor = new HashMap<>();
     Map<Long, MStorageDescriptor> sdIdToStorageDescriptor = new HashMap<>();
     Map<Long, MPartition> partIdToPartition = new HashMap<>();
     Map<Long, MPartitionPrivilege> partGrantIdToPrivilege = new HashMap<>();
@@ -753,14 +753,22 @@ class DirectSqlInsertPart {
       Long serDeId = getDataStoreId(MSerDeInfo.class);
       serdeIdToSerDeInfo.put(serDeId, sd.getSerDeInfo());
 
-      Long cdId;
-      DatastoreId storeId = (DatastoreId) pm.getObjectId(sd.getCD());
-      if (storeId == null) {
-        cdId = getDataStoreId(MColumnDescriptor.class);
-        cdIdToColumnDescriptor.put(cdId, sd.getCD());
-      } else {
-        cdId = (Long) storeId.getKeyAsObject();
-      }
+      // Long cdId;
+      // DatastoreId storeId = (DatastoreId) pm.getObjectId(sd.getCD());
+      // if (storeId == null) {
+      //   cdId = getDataStoreId(MColumnDescriptor.class);
+      //   cdIdToColumnDescriptor.put(cdId, sd.getCD());
+      // } else {
+      //   cdId = (Long) storeId.getKeyAsObject();
+      // }
+      Long cdId = cdToCdId.computeIfAbsent(sd.getCD(), k -> {
+        try {
+          return getDataStoreId(MColumnDescriptor.class);
+        } catch (MetaException me) {
+          throw new RuntimeException(me);
+        }
+      });
+      
 
       Long sdId = getDataStoreId(MStorageDescriptor.class);
       sdIdToStorageDescriptor.put(sdId, sd);
@@ -807,8 +815,10 @@ class DirectSqlInsertPart {
     }
     insertSerdeInBatch(serdeIdToSerDeInfo);
     insertSerdeParamInBatch(serdeIdToSerDeInfo);
-    insertColumnDescriptorInBatch(cdIdToColumnDescriptor);
-    insertColumnV2InBatch(cdIdToColumnDescriptor);
+    // insertColumnDescriptorInBatch(cdIdToColumnDescriptor);
+    // insertColumnV2InBatch(cdIdToColumnDescriptor);
+    insertColumnDescriptorInBatch(cdToCdId);
+    insertColumnV2InBatch(cdToCdId);
     insertStorageDescriptorInBatch(sdIdToStorageDescriptor, sdIdToSerdeId, sdIdToCdId);
     insertStorageDescriptorParamInBatch(sdIdToStorageDescriptor);
     insertBucketColInBatch(sdIdToStorageDescriptor);

@@ -91,6 +91,7 @@ import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.metastore.client.builder.GetPartitionsArgs;
 import org.apache.hadoop.hive.metastore.conf.MetastoreConf;
 import org.apache.hadoop.hive.metastore.conf.MetastoreConf.ConfVars;
+import org.apache.hadoop.hive.metastore.model.MColumnDescriptor;
 import org.apache.hadoop.hive.metastore.model.MConstraint;
 import org.apache.hadoop.hive.metastore.model.MCreationMetadata;
 import org.apache.hadoop.hive.metastore.model.MDatabase;
@@ -534,7 +535,9 @@ class MetaStoreDirectSql {
    */
   public void addPartitions(List<MPartition> parts, List<List<MPartitionPrivilege>> partPrivilegesList,
       List<List<MPartitionColumnPrivilege>> partColPrivilegesList) throws MetaException {
-    directSqlInsertPart.addPartitions(parts, partPrivilegesList, partColPrivilegesList);
+    Map<MColumnDescriptor, Long> cdToCdId = new HashMap<>();
+    // put table cd which could be reused by partitions
+    directSqlInsertPart.addPartitions(parts, partPrivilegesList, partColPrivilegesList, cdToCdId);
   }
 
   /**
